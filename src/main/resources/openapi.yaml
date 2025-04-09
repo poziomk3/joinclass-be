@@ -1,14 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Task Management API
+  title: JoinClass API
   version: 1.0.0
-  description: API for managing tasks, users, and submissions in a learning platform.
+  description: |
+    Backend API for managing users, rooms, assignments, submissions, and grading.
+    Google SSO is used for authentication.
 
 servers:
-  - url: https://api.example.com/v1
-    description: Production
   - url: http://localhost:8080
-    description: Local dev
+    description: Local Dev
 
 security:
   - bearerAuth: []
@@ -21,30 +21,39 @@ components:
       bearerFormat: JWT
 
   schemas:
-    User:
+
+    GoogleUser:
       type: object
-      required:
-        - id
-        - name
-        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        googleId:
+          type: string
+        profileImageUrl:
+          type: string
+        lastLogin:
+          type: string
+          format: date-time
+
+    Room:
+      type: object
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
-        email:
+        ownerId:
           type: string
-          format: email
-        role:
-          type: string
-          enum: [student, instructor]
+          format: uuid
 
-    Task:
+    Assignment:
       type: object
-      required:
-        - id
-        - title
       properties:
         id:
           type: string
@@ -56,83 +65,201 @@ components:
         dueDate:
           type: string
           format: date-time
-        createdBy:
-          $ref: '#/components/schemas/User'
+        fileUrl:
+          type: string
+        roomId:
+          type: string
+          format: uuid
 
-    NewTaskRequest:
+    Submission:
       type: object
-      required:
-        - title
       properties:
-        title:
+        id:
           type: string
-        description:
+          format: uuid
+        assignmentId:
           type: string
-        dueDate:
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        fileUrl:
+          type: string
+        comment:
+          type: string
+        submittedAt:
           type: string
           format: date-time
 
-tags:
-  - name: Tasks
-    description: Endpoints related to task management
+    Grade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        score:
+          type: number
+          format: float
+        feedback:
+          type: string
+        gradedAt:
+          type: string
+          format: date-time
+        fileUrl:
+          type: string
+        gradedById:
+          type: string
+          format: uuid
 
 paths:
-  /tasks:
+
+  /users/me:
     get:
-      tags:
-        - Tasks
-      summary: Get all tasks
-      security:
-        - bearerAuth: []
+      summary: Get current authenticated user
+      operationId: getCurrentUser
       responses:
         '200':
-          description: List of tasks
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleUser'
+
+  /rooms:
+    get:
+      summary: Get rooms owned by current user
+      operationId: getMyRooms
+      responses:
+        '200':
+          description: List of rooms
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Task'
+                  $ref: '#/components/schemas/Room'
+
     post:
-      tags:
-        - Tasks
-      summary: Create a new task
-      security:
-        - bearerAuth: []
+      summary: Create a new room
+      operationId: createRoom
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NewTaskRequest'
+              $ref: '#/components/schemas/Room'
       responses:
         '201':
-          description: Task created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
+          description: Room created
 
-  /tasks/{taskId}:
-    get:
-      tags:
-        - Tasks
-      summary: Get task by ID
-      security:
-        - bearerAuth: []
+  /rooms/{roomId}/join:
+    post:
+      summary: Join a room by ID
+      operationId: joinRoom
       parameters:
-        - name: taskId
+        - name: roomId
           in: path
           required: true
           schema:
             type: string
-            format: uuid
       responses:
         '200':
-          description: Task details
+          description: Joined
+
+  /rooms/{roomId}/assignments:
+    get:
+      summary: Get assignments in room
+      operationId: getAssignmentsInRoom
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of assignments
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
-        '404':
-          description: Task not found
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assignment'
+
+    post:
+      summary: Create assignment in room
+      operationId: createAssignment
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Assignment'
+      responses:
+        '201':
+          description: Assignment created
+
+  /assignments/{assignmentId}/submissions:
+    get:
+      summary: Get all submissions for an assignment
+      operationId: getSubmissions
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Submission'
+
+    post:
+      summary: Submit a solution
+      operationId: submitSolution
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Submission'
+      responses:
+        '201':
+          description: Submission saved
+
+  /submissions/{submissionId}/grade:
+    post:
+      summary: Grade a submission
+      operationId: gradeSubmission
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Grade'
+      responses:
+        '200':
+          description: Graded successfully

@@ -1,6 +1,9 @@
 spring:
   application:
     name: JoinClass
+  jpa:
+    hibernate:
+      ddl-auto: update
   security:
     oauth2:
       resourceserver:
